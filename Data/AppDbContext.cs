@@ -20,30 +20,40 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         modelBuilder.Entity<Student>(entity =>
         {
             entity.HasKey(student => student.Id);
-            entity.Property(student => student.StudentNumber)
+            entity.Property(student => student.RegistrationNo)
                 .HasMaxLength(20)
                 .IsRequired();
-            entity.Property(student => student.FirstName)
+            entity.Property(student => student.FullName)
                 .HasMaxLength(100)
                 .IsRequired();
-            entity.Property(student => student.LastName)
-                .HasMaxLength(100)
+            entity.Property(student => student.Email)
+                .HasMaxLength(150)
                 .IsRequired();
-            entity.HasIndex(student => student.StudentNumber)
+            entity.Property(student => student.CreatedAtUtc)
+                .HasColumnType("timestamp with time zone")
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.HasIndex(student => student.RegistrationNo)
                 .IsUnique();
-            entity.HasIndex(student => new { student.LastName, student.FirstName });
+            entity.HasIndex(student => student.Email)
+                .IsUnique();
+            entity.ToTable(table => table.HasCheckConstraint(
+                "ck_students_email_lowercase",
+                "email = lower(email)"));
         });
 
         modelBuilder.Entity<Course>(entity =>
         {
             entity.HasKey(course => course.Id);
-            entity.Property(course => course.CourseCode)
-                .HasMaxLength(20)
+            entity.Property(course => course.Code)
+                .HasMaxLength(10)
                 .IsRequired();
-            entity.Property(course => course.Name)
-                .HasMaxLength(200)
+            entity.Property(course => course.Title)
+                .HasMaxLength(150)
                 .IsRequired();
-            entity.HasIndex(course => course.CourseCode)
+            entity.Property(course => course.CreatedAtUtc)
+                .HasColumnType("timestamp with time zone")
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.HasIndex(course => course.Code)
                 .IsUnique();
             entity.ToTable(table => table.HasCheckConstraint(
                 "ck_courses_credit_hours",
@@ -52,16 +62,21 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
         modelBuilder.Entity<Enrollment>(entity =>
         {
-            entity.HasKey(enrollment => new { enrollment.StudentId, enrollment.CourseId });
+            entity.HasKey(enrollment => enrollment.Id);
+            entity.Property(enrollment => enrollment.EnrolledAtUtc)
+                .HasColumnType("timestamp with time zone")
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.HasIndex(enrollment => new { enrollment.StudentId, enrollment.CourseId })
+                .IsUnique();
             entity.HasIndex(enrollment => enrollment.CourseId);
             entity.HasOne(enrollment => enrollment.Student)
                 .WithMany(student => student.Enrollments)
                 .HasForeignKey(enrollment => enrollment.StudentId)
-                .OnDelete(DeleteBehavior.Cascade);
+                .OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(enrollment => enrollment.Course)
                 .WithMany(course => course.Enrollments)
                 .HasForeignKey(enrollment => enrollment.CourseId)
-                .OnDelete(DeleteBehavior.Cascade);
+                .OnDelete(DeleteBehavior.Restrict);
             entity.ToTable(table => table.HasCheckConstraint(
                 "ck_enrollments_mark",
                 "mark IS NULL OR mark BETWEEN 0 AND 100"));
@@ -71,22 +86,20 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         {
             entity.HasKey(user => user.Id);
             entity.Property(user => user.Username)
-                .HasMaxLength(100)
+                .HasMaxLength(50)
                 .IsRequired();
             entity.Property(user => user.PasswordHash)
-                .HasMaxLength(500)
+                .HasColumnType("text")
                 .IsRequired();
             entity.Property(user => user.Role)
-                .HasMaxLength(30)
+                .HasMaxLength(20)
                 .IsRequired();
             entity.HasIndex(user => user.Username)
                 .IsUnique();
-            entity.HasIndex(user => user.StudentId)
-                .IsUnique();
             entity.HasOne(user => user.Student)
-                .WithOne(student => student.User)
-                .HasForeignKey<User>(user => user.StudentId)
-                .OnDelete(DeleteBehavior.SetNull);
+                .WithMany(student => student.Users)
+                .HasForeignKey(user => user.StudentId)
+                .OnDelete(DeleteBehavior.Restrict);
             entity.ToTable(table => table.HasCheckConstraint(
                 "ck_users_role",
                 "role IN ('Teacher', 'Student')"));

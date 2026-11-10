@@ -2,6 +2,8 @@ namespace MarksApi.Models;
 
 public sealed class Enrollment
 {
+    public int Id { get; set; }
+
     public int StudentId { get; set; }
 
     public Student Student { get; set; } = null!;
@@ -11,4 +13,6 @@ public sealed class Enrollment
     public Course Course { get; set; } = null!;
 
     public int? Mark { get; set; }
+
+    public DateTimeOffset EnrolledAtUtc { get; set; }
 }
