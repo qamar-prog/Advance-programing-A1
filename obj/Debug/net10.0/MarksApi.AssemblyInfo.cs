@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("MarksApi")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+9fac9335b68638ede812e66b19a2b8657cd8ccea")]
 [assembly: System.Reflection.AssemblyProductAttribute("MarksApi")]
 [assembly: System.Reflection.AssemblyTitleAttribute("MarksApi")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
