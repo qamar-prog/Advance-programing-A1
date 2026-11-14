@@ -40,17 +40,23 @@ namespace MarksApi.Migrations
                 name: "ix_courses_course_code",
                 table: "courses");
 
+            migrationBuilder.Sql(
+                "UPDATE students SET last_name = BTRIM(CONCAT_WS(' ', " +
+                "NULLIF(BTRIM(first_name), ''), NULLIF(BTRIM(last_name), '')));");
+
             migrationBuilder.DropColumn(
                 name: "first_name",
                 table: "students");
 
-            migrationBuilder.DropColumn(
+            migrationBuilder.RenameColumn(
                 name: "course_code",
-                table: "courses");
+                table: "courses",
+                newName: "code");
 
-            migrationBuilder.DropColumn(
+            migrationBuilder.RenameColumn(
                 name: "name",
-                table: "courses");
+                table: "courses",
+                newName: "title");
 
             migrationBuilder.RenameColumn(
                 name: "student_number",
@@ -111,6 +117,9 @@ namespace MarksApi.Migrations
                 nullable: false,
                 defaultValue: "");
 
+            migrationBuilder.Sql(
+                "UPDATE students SET email = 'student-' || id::text || '@example.invalid' WHERE email = '';");
+
             migrationBuilder.AddColumn<int>(
                 name: "id",
                 table: "enrollments",
@@ -126,13 +135,15 @@ namespace MarksApi.Migrations
                 nullable: false,
                 defaultValueSql: "CURRENT_TIMESTAMP");
 
-            migrationBuilder.AddColumn<string>(
+            migrationBuilder.AlterColumn<string>(
                 name: "code",
                 table: "courses",
                 type: "character varying(10)",
                 maxLength: 10,
                 nullable: false,
-                defaultValue: "");
+                oldClrType: typeof(string),
+                oldType: "character varying(20)",
+                oldMaxLength: 20);
 
             migrationBuilder.AddColumn<DateTimeOffset>(
                 name: "created_at_utc",
@@ -141,13 +152,15 @@ namespace MarksApi.Migrations
                 nullable: false,
                 defaultValueSql: "CURRENT_TIMESTAMP");
 
-            migrationBuilder.AddColumn<string>(
+            migrationBuilder.AlterColumn<string>(
                 name: "title",
                 table: "courses",
                 type: "character varying(150)",
                 maxLength: 150,
                 nullable: false,
-                defaultValue: "");
+                oldClrType: typeof(string),
+                oldType: "character varying(200)",
+                oldMaxLength: 200);
 
             migrationBuilder.AddPrimaryKey(
                 name: "pk_enrollments",
@@ -246,6 +259,16 @@ namespace MarksApi.Migrations
                 name: "ix_courses_code",
                 table: "courses");
 
+            migrationBuilder.RenameColumn(
+                name: "code",
+                table: "courses",
+                newName: "course_code");
+
+            migrationBuilder.RenameColumn(
+                name: "title",
+                table: "courses",
+                newName: "name");
+
             migrationBuilder.DropColumn(
                 name: "created_at_utc",
                 table: "students");
@@ -263,15 +286,7 @@ namespace MarksApi.Migrations
                 table: "enrollments");
 
             migrationBuilder.DropColumn(
-                name: "code",
-                table: "courses");
-
-            migrationBuilder.DropColumn(
                 name: "created_at_utc",
-                table: "courses");
-
-            migrationBuilder.DropColumn(
-                name: "title",
                 table: "courses");
 
             migrationBuilder.RenameColumn(
@@ -326,21 +341,25 @@ namespace MarksApi.Migrations
                 nullable: false,
                 defaultValue: "");
 
-            migrationBuilder.AddColumn<string>(
+            migrationBuilder.AlterColumn<string>(
                 name: "course_code",
                 table: "courses",
                 type: "character varying(20)",
                 maxLength: 20,
                 nullable: false,
-                defaultValue: "");
+                oldClrType: typeof(string),
+                oldType: "character varying(10)",
+                oldMaxLength: 10);
 
-            migrationBuilder.AddColumn<string>(
+            migrationBuilder.AlterColumn<string>(
                 name: "name",
                 table: "courses",
                 type: "character varying(200)",
                 maxLength: 200,
                 nullable: false,
-                defaultValue: "");
+                oldClrType: typeof(string),
+                oldType: "character varying(150)",
+                oldMaxLength: 150);
 
             migrationBuilder.AddPrimaryKey(
                 name: "pk_enrollments",

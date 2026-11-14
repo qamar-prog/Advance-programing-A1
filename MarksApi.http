@@ -1,0 +1,158 @@
+@baseUrl = http://localhost:5277
+@token = replace-with-token-from-login
+@studentId = 1
+@courseId = 1
+@enrollmentId = 1
+
+### Health
+GET {{baseUrl}}/health
+
+### Login as the development teacher
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "teacher",
+  "password": "Teacher123!"
+}
+
+### List students
+GET {{baseUrl}}/api/students?page=1&pageSize=10
+Authorization: Bearer {{token}}
+
+### Find students
+GET {{baseUrl}}/api/students?search=demo&sort=fullName
+Authorization: Bearer {{token}}
+
+### Get a student
+GET {{baseUrl}}/api/students/{{studentId}}
+Authorization: Bearer {{token}}
+
+### Create a student
+POST {{baseUrl}}/api/students
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "registrationNo": "HTTP-1001",
+  "fullName": "HTTP Test Student",
+  "email": "http-test-student@example.test"
+}
+
+### Update a student
+PUT {{baseUrl}}/api/students/{{studentId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "registrationNo": "HTTP-1001",
+  "fullName": "Updated HTTP Student",
+  "email": "http-test-student@example.test"
+}
+
+### Get a transcript
+GET {{baseUrl}}/api/students/{{studentId}}/transcript
+Authorization: Bearer {{token}}
+
+### Delete a student without enrollments
+DELETE {{baseUrl}}/api/students/{{studentId}}
+Authorization: Bearer {{token}}
+
+### List courses
+GET {{baseUrl}}/api/courses?page=1&pageSize=10
+Authorization: Bearer {{token}}
+
+### Search courses
+GET {{baseUrl}}/api/courses?search=programming&sort=code
+Authorization: Bearer {{token}}
+
+### Get a course
+GET {{baseUrl}}/api/courses/{{courseId}}
+Authorization: Bearer {{token}}
+
+### Create a course
+POST {{baseUrl}}/api/courses
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "code": "HTTP101",
+  "title": "HTTP API Test Course",
+  "creditHours": 3
+}
+
+### Update a course
+PUT {{baseUrl}}/api/courses/{{courseId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "code": "HTTP101",
+  "title": "Updated HTTP Course",
+  "creditHours": 4
+}
+
+### Enroll a student in a course
+POST {{baseUrl}}/api/courses/{{courseId}}/enrollments
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "studentId": {{studentId}}
+}
+
+### List course enrollments
+GET {{baseUrl}}/api/courses/{{courseId}}/enrollments?page=1&pageSize=10
+Authorization: Bearer {{token}}
+
+### Get an enrollment
+GET {{baseUrl}}/api/enrollments/{{enrollmentId}}
+Authorization: Bearer {{token}}
+
+### Set an enrollment mark
+PUT {{baseUrl}}/api/enrollments/{{enrollmentId}}/mark
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "mark": 80
+}
+
+### Course statistics
+GET {{baseUrl}}/api/courses/{{courseId}}/stats
+Authorization: Bearer {{token}}
+
+### Remove an enrollment
+DELETE {{baseUrl}}/api/enrollments/{{enrollmentId}}
+Authorization: Bearer {{token}}
+
+### Delete a course without enrollments
+DELETE {{baseUrl}}/api/courses/{{courseId}}
+Authorization: Bearer {{token}}
+
+### Invalid student body (expected 400)
+POST {{baseUrl}}/api/students
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "registrationNo": "BAD",
+  "fullName": "",
+  "email": "not-an-email"
+}
+
+### Invalid mark (expected 400)
+PUT {{baseUrl}}/api/enrollments/{{enrollmentId}}/mark
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "mark": 101
+}
+
+### Unknown student (expected 404)
+GET {{baseUrl}}/api/students/2147483647
+Authorization: Bearer {{token}}
+
+### Unauthenticated students request (expected 401)
+GET {{baseUrl}}/api/students

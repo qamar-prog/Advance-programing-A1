@@ -1,8 +1,5 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Npgsql;
 
 namespace MarksApi.Api;
 
@@ -47,53 +44,11 @@ internal static class ApiResults
             title: "Not Found",
             detail: detail);
 
-    public static IResult Conflict(string detail) =>
-        Results.Problem(
-            statusCode: StatusCodes.Status409Conflict,
-            title: "Conflict",
-            detail: detail);
-
     public static IResult Forbidden(string detail) =>
         Results.Problem(
             statusCode: StatusCodes.Status403Forbidden,
             title: "Forbidden",
             detail: detail);
-
-    public static IResult InvalidSort(string parameter, string allowedValues) =>
-        Results.Problem(
-            statusCode: StatusCodes.Status400BadRequest,
-            title: "Validation Error",
-            detail: $"The sort value is invalid. Allowed values: {allowedValues}.",
-            extensions: new Dictionary<string, object?>
-            {
-                ["errors"] = new Dictionary<string, string[]>
-                {
-                    [parameter] = [$"Allowed values: {allowedValues}."]
-                }
-            });
-
-    public static IResult ConstraintError(DbUpdateException exception)
-    {
-        var postgresException = exception.InnerException as PostgresException;
-        return postgresException?.SqlState switch
-        {
-            PostgresErrorCodes.UniqueViolation => Conflict("A resource with the same unique value already exists."),
-            PostgresErrorCodes.ForeignKeyViolation => Conflict("A referenced resource does not exist or cannot be removed."),
-            PostgresErrorCodes.CheckViolation => Results.Problem(
-                statusCode: StatusCodes.Status400BadRequest,
-                title: "Validation Error",
-                detail: "One or more values violate a database constraint."),
-            _ => throw exception
-        };
-    }
-
-    public static bool IsConstraintViolation(DbUpdateException exception) =>
-        exception.InnerException is PostgresException
-        {
-            SqlState: PostgresErrorCodes.UniqueViolation
-                or PostgresErrorCodes.ForeignKeyViolation
-                or PostgresErrorCodes.CheckViolation
-        };
 }
 
 internal static class Pagination

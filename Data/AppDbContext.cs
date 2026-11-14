@@ -100,9 +100,15 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
                 .WithMany(student => student.Users)
                 .HasForeignKey(user => user.StudentId)
                 .OnDelete(DeleteBehavior.Restrict);
-            entity.ToTable(table => table.HasCheckConstraint(
-                "ck_users_role",
-                "role IN ('Teacher', 'Student')"));
+            entity.ToTable(table =>
+            {
+                table.HasCheckConstraint(
+                    "ck_users_role",
+                    "role IN ('Teacher', 'Student')");
+                table.HasCheckConstraint(
+                    "ck_users_student_requires_student_id",
+                    "role <> 'Student' OR student_id IS NOT NULL");
+            });
         });
     }
 }

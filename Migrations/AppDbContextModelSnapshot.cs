@@ -202,6 +202,8 @@ namespace MarksApi.Migrations
                     b.ToTable("users", null, t =>
                         {
                             t.HasCheckConstraint("ck_users_role", "role IN ('Teacher', 'Student')");
+
+                            t.HasCheckConstraint("ck_users_student_requires_student_id", "role <> 'Student' OR student_id IS NOT NULL");
                         });
                 });
 

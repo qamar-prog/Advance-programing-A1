@@ -1,10 +1,6 @@
 using System.Security.Claims;
 using MarksApi.Contracts;
-using MarksApi.Data;
-using MarksApi.Models;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
-using Npgsql;
+using MarksApi.Services;
 
 namespace MarksApi.Api;
 
@@ -12,41 +8,142 @@ internal static class ResourceEndpoints
 {
     public static void MapResourceEndpoints(this WebApplication app)
     {
-        app.MapPost("/api/auth/login", Login);
+        app.MapPost("/api/auth/login", Login)
+            .WithName("Login")
+            .WithTags("Authentication")
+            .WithSummary("Authenticate and issue a JWT.")
+            .Produces<LoginResponse>()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .RequireRateLimiting("login");
 
-        var students = app.MapGroup("/api/students").RequireAuthorization();
-        students.MapGet("", ListStudents).RequireAuthorization(policy => policy.RequireRole("Teacher"));
-        students.MapGet("/{id:int}", GetStudent);
-        students.MapPost("", CreateStudent).RequireAuthorization(policy => policy.RequireRole("Teacher"));
-        students.MapPut("/{id:int}", UpdateStudent).RequireAuthorization(policy => policy.RequireRole("Teacher"));
-        students.MapDelete("/{id:int}", DeleteStudent).RequireAuthorization(policy => policy.RequireRole("Teacher"));
-        students.MapGet("/{id:int}/transcript", GetTranscript);
+        var students = app.MapGroup("/api/students")
+            .WithTags("Students")
+            .RequireAuthorization();
+        students.MapGet("", ListStudents)
+            .WithName("ListStudents")
+            .WithSummary("List students with paging, search, and sorting.")
+            .Produces<PagedResponse<StudentResponse>>()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .RequireAuthorization(policy => policy.RequireRole("Teacher"));
+        students.MapGet("/{id:int}", GetStudent)
+            .WithName("GetStudent")
+            .WithSummary("Get a student by ID; students may access only their own record.")
+            .Produces<StudentResponse>()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound);
+        students.MapPost("", CreateStudent)
+            .WithName("CreateStudent")
+            .WithSummary("Create a student.")
+            .Produces<StudentResponse>(StatusCodes.Status201Created)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .RequireAuthorization(policy => policy.RequireRole("Teacher"));
+        students.MapPut("/{id:int}", UpdateStudent)
+            .WithName("UpdateStudent")
+            .WithSummary("Replace a student's editable information.")
+            .Produces<StudentResponse>()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .RequireAuthorization(policy => policy.RequireRole("Teacher"));
+        students.MapDelete("/{id:int}", DeleteStudent)
+            .WithName("DeleteStudent")
+            .WithSummary("Delete a student who has no enrollments.")
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .RequireAuthorization(policy => policy.RequireRole("Teacher"));
+        students.MapGet("/{id:int}/transcript", GetTranscript)
+            .WithName("GetStudentTranscript")
+            .WithSummary("Get a student's transcript and credit-hour weighted average.")
+            .Produces<TranscriptResponse>()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound);
 
-        var courses = app.MapGroup("/api/courses").RequireAuthorization();
-        courses.MapGet("", ListCourses);
-        courses.MapGet("/{id:int}", GetCourse);
-        courses.MapPost("", CreateCourse).RequireAuthorization(policy => policy.RequireRole("Teacher"));
-        courses.MapPut("/{id:int}", UpdateCourse).RequireAuthorization(policy => policy.RequireRole("Teacher"));
-        courses.MapDelete("/{id:int}", DeleteCourse).RequireAuthorization(policy => policy.RequireRole("Teacher"));
+        var courses = app.MapGroup("/api/courses")
+            .WithTags("Courses")
+            .RequireAuthorization();
+        courses.MapGet("", ListCourses)
+            .WithName("ListCourses")
+            .WithSummary("List courses with paging, search, and sorting.")
+            .Produces<PagedResponse<CourseResponse>>();
+        courses.MapGet("/{id:int}", GetCourse)
+            .WithName("GetCourse")
+            .WithSummary("Get a course by ID.")
+            .Produces<CourseResponse>()
+            .ProducesProblem(StatusCodes.Status404NotFound);
+        courses.MapPost("", CreateCourse)
+            .WithName("CreateCourse")
+            .WithSummary("Create a course.")
+            .Produces<CourseResponse>(StatusCodes.Status201Created)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .RequireAuthorization(policy => policy.RequireRole("Teacher"));
+        courses.MapPut("/{id:int}", UpdateCourse)
+            .WithName("UpdateCourse")
+            .WithSummary("Replace a course's editable information.")
+            .Produces<CourseResponse>()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .RequireAuthorization(policy => policy.RequireRole("Teacher"));
+        courses.MapDelete("/{id:int}", DeleteCourse)
+            .WithName("DeleteCourse")
+            .WithSummary("Delete a course that has no enrollments.")
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .RequireAuthorization(policy => policy.RequireRole("Teacher"));
         courses.MapPost("/{courseId:int}/enrollments", CreateEnrollment)
+            .WithName("EnrollStudentInCourse")
+            .WithSummary("Enroll a student in a course.")
+            .Produces<EnrollmentResponse>(StatusCodes.Status201Created)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
             .RequireAuthorization(policy => policy.RequireRole("Teacher"));
         courses.MapGet("/{courseId:int}/enrollments", ListCourseEnrollments)
+            .WithName("ListCourseEnrollments")
+            .WithSummary("List enrollments in a course.")
+            .Produces<PagedResponse<EnrollmentResponse>>()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .RequireAuthorization(policy => policy.RequireRole("Teacher"));
         courses.MapGet("/{courseId:int}/stats", GetCourseStats)
+            .WithName("GetCourseStatistics")
+            .WithSummary("Get enrollment, grading, average, and pass statistics for a course.")
+            .Produces<CourseStatsResponse>()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .RequireAuthorization(policy => policy.RequireRole("Teacher"));
 
         var enrollments = app.MapGroup("/api/enrollments")
+            .WithTags("Enrollments")
             .RequireAuthorization(policy => policy.RequireRole("Teacher"));
-        enrollments.MapGet("/{id:int}", GetEnrollment);
-        enrollments.MapPut("/{id:int}/mark", UpdateMark);
-        enrollments.MapDelete("/{id:int}", DeleteEnrollment);
+        enrollments.MapGet("/{id:int}", GetEnrollment)
+            .WithName("GetEnrollment")
+            .WithSummary("Get an enrollment by ID.")
+            .Produces<EnrollmentResponse>()
+            .ProducesProblem(StatusCodes.Status404NotFound);
+        enrollments.MapPut("/{id:int}/mark", UpdateMark)
+            .WithName("UpdateEnrollmentMark")
+            .WithSummary("Set an enrollment mark from 0 to 100.")
+            .Produces<EnrollmentResponse>()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound);
+        enrollments.MapDelete("/{id:int}", DeleteEnrollment)
+            .WithName("DeleteEnrollment")
+            .WithSummary("Remove an enrollment.")
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status404NotFound);
     }
 
     private static async Task<IResult> Login(
         LoginRequest request,
-        AppDbContext db,
-        IConfiguration configuration,
-        IPasswordHasher<User> passwordHasher,
+        IMarksService service,
         CancellationToken cancellationToken)
     {
         var validation = ApiResults.Validate(request);
@@ -54,113 +151,35 @@ internal static class ResourceEndpoints
         {
             return validation;
         }
-
-        var user = await db.Users.AsNoTracking()
-            .SingleOrDefaultAsync(
-                item => item.Username == request.Username.Trim(),
-                cancellationToken);
-        if (user is null
-            || passwordHasher.VerifyHashedPassword(user, user.PasswordHash, request.Password)
-                == PasswordVerificationResult.Failed
-            || (user.Role == "Student" && user.StudentId is null))
-        {
-            return Results.Problem(
+        var response = await service.LoginAsync(request, cancellationToken);
+        return response is null
+            ? Results.Problem(
                 statusCode: StatusCodes.Status401Unauthorized,
                 title: "Unauthorized",
-                detail: "The username or password is incorrect.");
-        }
-
-        var issuer = configuration["Jwt:Issuer"]
-            ?? throw new InvalidOperationException("Configuration value Jwt:Issuer is required.");
-        var audience = configuration["Jwt:Audience"]
-            ?? throw new InvalidOperationException("Configuration value Jwt:Audience is required.");
-        var key = configuration["Jwt:Key"]
-            ?? throw new InvalidOperationException("Secret configuration value Jwt:Key is required.");
-        var lifetime = configuration.GetValue<int>("Jwt:LifetimeMinutes");
-        var expiresAt = DateTime.UtcNow.AddMinutes(lifetime);
-        var claims = new List<Claim>
-        {
-            new(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new(ClaimTypes.Name, user.Username),
-            new(ClaimTypes.Role, user.Role)
-        };
-        if (user.StudentId.HasValue)
-        {
-            claims.Add(new Claim("student_id", user.StudentId.Value.ToString()));
-        }
-
-        var token = new System.IdentityModel.Tokens.Jwt.JwtSecurityToken(
-            issuer,
-            audience,
-            claims,
-            expires: expiresAt,
-            signingCredentials: new Microsoft.IdentityModel.Tokens.SigningCredentials(
-                JwtSecurity.Key(key),
-                Microsoft.IdentityModel.Tokens.SecurityAlgorithms.HmacSha256));
-        var encodedToken = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler().WriteToken(token);
-        return Results.Ok(new LoginResponse(encodedToken, "Bearer", expiresAt));
+                detail: "The username or password is incorrect.")
+            : Results.Ok(response);
     }
 
     private static async Task<IResult> ListStudents(
-        AppDbContext db,
+        IMarksService service,
         int? page,
         int? pageSize,
         string? search,
         string? sort,
-        CancellationToken cancellationToken)
-    {
-        var (normalizedPage, normalizedPageSize) = Pagination.Normalize(page, pageSize);
-        var query = db.Students.AsNoTracking();
-        if (!string.IsNullOrWhiteSpace(search))
-        {
-            var term = $"%{search.Trim()}%";
-            query = query.Where(student =>
-                EF.Functions.ILike(student.RegistrationNo, term)
-                || EF.Functions.ILike(student.FullName, term)
-                || EF.Functions.ILike(student.Email, term));
-        }
-
-        var ordered = sort?.Trim().ToLowerInvariant() switch
-        {
-            null or "" or "id" => query.OrderBy(student => student.Id),
-            "registrationno" or "registration_no" => query.OrderBy(student => student.RegistrationNo),
-            "fullname" or "full_name" => query.OrderBy(student => student.FullName),
-            "email" => query.OrderBy(student => student.Email),
-            "createdatutc" or "created_at_utc" => query.OrderBy(student => student.CreatedAtUtc),
-            _ => null
-        };
-        if (ordered is null)
-        {
-            return ApiResults.InvalidSort("sort", "id, registrationNo, fullName, email, createdAtUtc");
-        }
-
-        var totalCount = await query.LongCountAsync(cancellationToken);
-        var items = await ordered
-            .Skip((normalizedPage - 1) * normalizedPageSize)
-            .Take(normalizedPageSize)
-            .Select(student => new StudentResponse(
-                student.Id, student.RegistrationNo, student.FullName, student.Email, student.CreatedAtUtc))
-            .ToListAsync(cancellationToken);
-        return Results.Ok(new PagedResponse<StudentResponse>(
-            items, normalizedPage, normalizedPageSize, totalCount));
-    }
+        CancellationToken cancellationToken) =>
+        Results.Ok(await service.ListStudentsAsync(page, pageSize, search, sort, cancellationToken));
 
     private static async Task<IResult> GetStudent(
         int id,
         ClaimsPrincipal principal,
-        AppDbContext db,
+        IMarksService service,
         CancellationToken cancellationToken)
     {
         if (!CanReadStudent(principal, id))
         {
             return ApiResults.Forbidden("You may only read your own student record.");
         }
-
-        var student = await db.Students.AsNoTracking()
-            .Where(item => item.Id == id)
-            .Select(item => new StudentResponse(
-                item.Id, item.RegistrationNo, item.FullName, item.Email, item.CreatedAtUtc))
-            .SingleOrDefaultAsync(cancellationToken);
+        var student = await service.GetStudentAsync(id, cancellationToken);
         return student is null
             ? ApiResults.NotFound($"Student {id} was not found.")
             : Results.Ok(student);
@@ -168,7 +187,7 @@ internal static class ResourceEndpoints
 
     private static async Task<IResult> CreateStudent(
         CreateStudentRequest request,
-        AppDbContext db,
+        IMarksService service,
         CancellationToken cancellationToken)
     {
         var validation = ApiResults.Validate(request);
@@ -176,32 +195,14 @@ internal static class ResourceEndpoints
         {
             return validation;
         }
-
-        var student = new Student
-        {
-            RegistrationNo = request.RegistrationNo.Trim(),
-            FullName = request.FullName.Trim(),
-            Email = request.Email.Trim().ToLowerInvariant(),
-            CreatedAtUtc = DateTimeOffset.UtcNow
-        };
-        db.Students.Add(student);
-        try
-        {
-            await db.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateException exception) when (ApiResults.IsConstraintViolation(exception))
-        {
-            return ApiResults.ConstraintError(exception);
-        }
-
-        var response = ToStudentResponse(student);
-        return Results.Created($"/api/students/{student.Id}", response);
+        var student = await service.CreateStudentAsync(request, cancellationToken);
+        return Results.Created($"/api/students/{student.Id}", student);
     }
 
     private static async Task<IResult> UpdateStudent(
         int id,
         UpdateStudentRequest request,
-        AppDbContext db,
+        IMarksService service,
         CancellationToken cancellationToken)
     {
         var validation = ApiResults.Validate(request);
@@ -209,153 +210,51 @@ internal static class ResourceEndpoints
         {
             return validation;
         }
-
-        var student = await db.Students.FindAsync([id], cancellationToken);
-        if (student is null)
-        {
-            return ApiResults.NotFound($"Student {id} was not found.");
-        }
-
-        student.RegistrationNo = request.RegistrationNo.Trim();
-        student.FullName = request.FullName.Trim();
-        student.Email = request.Email.Trim().ToLowerInvariant();
-        try
-        {
-            await db.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateException exception) when (ApiResults.IsConstraintViolation(exception))
-        {
-            return ApiResults.ConstraintError(exception);
-        }
-
-        return Results.Ok(ToStudentResponse(student));
+        var student = await service.UpdateStudentAsync(id, request, cancellationToken);
+        return student is null
+            ? ApiResults.NotFound($"Student {id} was not found.")
+            : Results.Ok(student);
     }
 
     private static async Task<IResult> DeleteStudent(
         int id,
-        AppDbContext db,
-        CancellationToken cancellationToken)
-    {
-        var student = await db.Students.FindAsync([id], cancellationToken);
-        if (student is null)
-        {
-            return ApiResults.NotFound($"Student {id} was not found.");
-        }
-
-        if (await db.Enrollments.AnyAsync(item => item.StudentId == id, cancellationToken)
-            || await db.Users.AnyAsync(user => user.StudentId == id, cancellationToken))
-        {
-            return ApiResults.Conflict("A student with enrollments or a linked user cannot be deleted.");
-        }
-
-        db.Students.Remove(student);
-        try
-        {
-            await db.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateException exception) when (ApiResults.IsConstraintViolation(exception))
-        {
-            return ApiResults.ConstraintError(exception);
-        }
-        return Results.NoContent();
-    }
+        IMarksService service,
+        CancellationToken cancellationToken) =>
+        await service.DeleteStudentAsync(id, cancellationToken)
+            ? Results.NoContent()
+            : ApiResults.NotFound($"Student {id} was not found.");
 
     private static async Task<IResult> GetTranscript(
         int id,
         ClaimsPrincipal principal,
-        AppDbContext db,
-        IConfiguration configuration,
+        IMarksService service,
         CancellationToken cancellationToken)
     {
         if (!CanReadStudent(principal, id))
         {
             return ApiResults.Forbidden("You may only read your own transcript.");
         }
-
-        var student = await db.Students.AsNoTracking()
-            .Where(item => item.Id == id)
-            .Select(item => new { item.Id, item.RegistrationNo, item.FullName })
-            .SingleOrDefaultAsync(cancellationToken);
-        if (student is null)
-        {
-            return ApiResults.NotFound($"Student {id} was not found.");
-        }
-
-        var passMark = configuration.GetValue<int>("PassMark");
-        var courses = await db.Enrollments.AsNoTracking()
-            .Where(enrollment => enrollment.StudentId == id)
-            .OrderBy(enrollment => enrollment.Course.Code)
-            .Select(enrollment => new TranscriptItemResponse(
-                enrollment.CourseId,
-                enrollment.Course.Code,
-                enrollment.Course.Title,
-                enrollment.Course.CreditHours,
-                enrollment.Mark,
-                enrollment.Mark == null ? null : enrollment.Mark >= passMark))
-            .ToListAsync(cancellationToken);
-        var graded = courses.Where(course => course.Mark.HasValue).ToArray();
-        decimal? weightedAverage = graded.Length == 0
-            ? null
-            : graded.Sum(course => (decimal)course.Mark!.Value * course.CreditHours)
-                / graded.Sum(course => course.CreditHours);
-
-        return Results.Ok(new TranscriptResponse(
-            student.Id, student.RegistrationNo, student.FullName, courses, weightedAverage));
+        var transcript = await service.GetTranscriptAsync(id, cancellationToken);
+        return transcript is null
+            ? ApiResults.NotFound($"Student {id} was not found.")
+            : Results.Ok(transcript);
     }
 
     private static async Task<IResult> ListCourses(
-        AppDbContext db,
+        IMarksService service,
         int? page,
         int? pageSize,
         string? search,
         string? sort,
-        CancellationToken cancellationToken)
-    {
-        var (normalizedPage, normalizedPageSize) = Pagination.Normalize(page, pageSize);
-        var query = db.Courses.AsNoTracking();
-        if (!string.IsNullOrWhiteSpace(search))
-        {
-            var term = $"%{search.Trim()}%";
-            query = query.Where(course =>
-                EF.Functions.ILike(course.Code, term)
-                || EF.Functions.ILike(course.Title, term));
-        }
-
-        var ordered = sort?.Trim().ToLowerInvariant() switch
-        {
-            null or "" or "id" => query.OrderBy(course => course.Id),
-            "code" => query.OrderBy(course => course.Code),
-            "title" => query.OrderBy(course => course.Title),
-            "credithours" or "credit_hours" => query.OrderBy(course => course.CreditHours),
-            "createdatutc" or "created_at_utc" => query.OrderBy(course => course.CreatedAtUtc),
-            _ => null
-        };
-        if (ordered is null)
-        {
-            return ApiResults.InvalidSort("sort", "id, code, title, creditHours, createdAtUtc");
-        }
-
-        var totalCount = await query.LongCountAsync(cancellationToken);
-        var items = await ordered
-            .Skip((normalizedPage - 1) * normalizedPageSize)
-            .Take(normalizedPageSize)
-            .Select(course => new CourseResponse(
-                course.Id, course.Code, course.Title, course.CreditHours, course.CreatedAtUtc))
-            .ToListAsync(cancellationToken);
-        return Results.Ok(new PagedResponse<CourseResponse>(
-            items, normalizedPage, normalizedPageSize, totalCount));
-    }
+        CancellationToken cancellationToken) =>
+        Results.Ok(await service.ListCoursesAsync(page, pageSize, search, sort, cancellationToken));
 
     private static async Task<IResult> GetCourse(
         int id,
-        AppDbContext db,
+        IMarksService service,
         CancellationToken cancellationToken)
     {
-        var course = await db.Courses.AsNoTracking()
-            .Where(item => item.Id == id)
-            .Select(item => new CourseResponse(
-                item.Id, item.Code, item.Title, item.CreditHours, item.CreatedAtUtc))
-            .SingleOrDefaultAsync(cancellationToken);
+        var course = await service.GetCourseAsync(id, cancellationToken);
         return course is null
             ? ApiResults.NotFound($"Course {id} was not found.")
             : Results.Ok(course);
@@ -363,7 +262,7 @@ internal static class ResourceEndpoints
 
     private static async Task<IResult> CreateCourse(
         CreateCourseRequest request,
-        AppDbContext db,
+        IMarksService service,
         CancellationToken cancellationToken)
     {
         var validation = ApiResults.Validate(request);
@@ -371,31 +270,14 @@ internal static class ResourceEndpoints
         {
             return validation;
         }
-
-        var course = new Course
-        {
-            Code = request.Code.Trim(),
-            Title = request.Title.Trim(),
-            CreditHours = request.CreditHours,
-            CreatedAtUtc = DateTimeOffset.UtcNow
-        };
-        db.Courses.Add(course);
-        try
-        {
-            await db.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateException exception) when (ApiResults.IsConstraintViolation(exception))
-        {
-            return ApiResults.ConstraintError(exception);
-        }
-
-        return Results.Created($"/api/courses/{course.Id}", ToCourseResponse(course));
+        var course = await service.CreateCourseAsync(request, cancellationToken);
+        return Results.Created($"/api/courses/{course.Id}", course);
     }
 
     private static async Task<IResult> UpdateCourse(
         int id,
         UpdateCourseRequest request,
-        AppDbContext db,
+        IMarksService service,
         CancellationToken cancellationToken)
     {
         var validation = ApiResults.Validate(request);
@@ -403,59 +285,24 @@ internal static class ResourceEndpoints
         {
             return validation;
         }
-
-        var course = await db.Courses.FindAsync([id], cancellationToken);
-        if (course is null)
-        {
-            return ApiResults.NotFound($"Course {id} was not found.");
-        }
-
-        course.Code = request.Code.Trim();
-        course.Title = request.Title.Trim();
-        course.CreditHours = request.CreditHours;
-        try
-        {
-            await db.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateException exception) when (ApiResults.IsConstraintViolation(exception))
-        {
-            return ApiResults.ConstraintError(exception);
-        }
-
-        return Results.Ok(ToCourseResponse(course));
+        var course = await service.UpdateCourseAsync(id, request, cancellationToken);
+        return course is null
+            ? ApiResults.NotFound($"Course {id} was not found.")
+            : Results.Ok(course);
     }
 
     private static async Task<IResult> DeleteCourse(
         int id,
-        AppDbContext db,
-        CancellationToken cancellationToken)
-    {
-        var course = await db.Courses.FindAsync([id], cancellationToken);
-        if (course is null)
-        {
-            return ApiResults.NotFound($"Course {id} was not found.");
-        }
-        if (await db.Enrollments.AnyAsync(item => item.CourseId == id, cancellationToken))
-        {
-            return ApiResults.Conflict("A course with enrollments cannot be deleted.");
-        }
-
-        db.Courses.Remove(course);
-        try
-        {
-            await db.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateException exception) when (ApiResults.IsConstraintViolation(exception))
-        {
-            return ApiResults.ConstraintError(exception);
-        }
-        return Results.NoContent();
-    }
+        IMarksService service,
+        CancellationToken cancellationToken) =>
+        await service.DeleteCourseAsync(id, cancellationToken)
+            ? Results.NoContent()
+            : ApiResults.NotFound($"Course {id} was not found.");
 
     private static async Task<IResult> CreateEnrollment(
         int courseId,
         CreateEnrollmentRequest request,
-        AppDbContext db,
+        IMarksService service,
         CancellationToken cancellationToken)
     {
         var validation = ApiResults.Validate(request);
@@ -463,89 +310,41 @@ internal static class ResourceEndpoints
         {
             return validation;
         }
-        if (!await db.Courses.AnyAsync(course => course.Id == courseId, cancellationToken))
-        {
-            return ApiResults.NotFound($"Course {courseId} was not found.");
-        }
-        if (!await db.Students.AnyAsync(student => student.Id == request.StudentId, cancellationToken))
-        {
-            return ApiResults.NotFound($"Student {request.StudentId} was not found.");
-        }
-
-        var enrollment = new Enrollment
-        {
-            StudentId = request.StudentId,
-            CourseId = courseId,
-            Mark = request.Mark,
-            EnrolledAtUtc = DateTimeOffset.UtcNow
-        };
-        db.Enrollments.Add(enrollment);
-        try
-        {
-            await db.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateException exception) when (ApiResults.IsConstraintViolation(exception))
-        {
-            return ApiResults.ConstraintError(exception);
-        }
-
-        return Results.Created(
-            $"/api/enrollments/{enrollment.Id}",
-            ToEnrollmentResponse(enrollment));
+        var enrollment = await service.CreateEnrollmentAsync(courseId, request, cancellationToken);
+        return Results.Created($"/api/enrollments/{enrollment.Id}", enrollment);
     }
 
     private static async Task<IResult> ListCourseEnrollments(
         int courseId,
-        AppDbContext db,
+        IMarksService service,
         int? page,
         int? pageSize,
         string? search,
         string? sort,
         CancellationToken cancellationToken)
     {
-        if (!await db.Courses.AnyAsync(course => course.Id == courseId, cancellationToken))
-        {
-            return ApiResults.NotFound($"Course {courseId} was not found.");
-        }
-        var (normalizedPage, normalizedPageSize) = Pagination.Normalize(page, pageSize);
-        var query = db.Enrollments.AsNoTracking().Where(item => item.CourseId == courseId);
-        if (!string.IsNullOrWhiteSpace(search))
-        {
-            var term = $"%{search.Trim()}%";
-            query = query.Where(enrollment =>
-                EF.Functions.ILike(enrollment.Student.RegistrationNo, term)
-                || EF.Functions.ILike(enrollment.Student.FullName, term));
-        }
+        var result = await service.ListCourseEnrollmentsAsync(
+            courseId, page, pageSize, search, sort, cancellationToken);
+        return result is null
+            ? ApiResults.NotFound($"Course {courseId} was not found.")
+            : Results.Ok(result);
+    }
 
-        var ordered = sort?.Trim().ToLowerInvariant() switch
-        {
-            null or "" or "id" => query.OrderBy(enrollment => enrollment.Id),
-            "studentid" or "student_id" => query.OrderBy(enrollment => enrollment.StudentId),
-            "mark" => query.OrderBy(enrollment => enrollment.Mark),
-            "enrolledatutc" or "enrolled_at_utc" => query.OrderBy(enrollment => enrollment.EnrolledAtUtc),
-            _ => null
-        };
-        if (ordered is null)
-        {
-            return ApiResults.InvalidSort("sort", "id, studentId, mark, enrolledAtUtc");
-        }
-
-        var totalCount = await query.LongCountAsync(cancellationToken);
-        var items = await ordered
-            .Skip((normalizedPage - 1) * normalizedPageSize)
-            .Take(normalizedPageSize)
-            .Select(enrollment => new EnrollmentResponse(
-                enrollment.Id, enrollment.StudentId, enrollment.CourseId,
-                enrollment.Mark, enrollment.EnrolledAtUtc))
-            .ToListAsync(cancellationToken);
-        return Results.Ok(new PagedResponse<EnrollmentResponse>(
-            items, normalizedPage, normalizedPageSize, totalCount));
+    private static async Task<IResult> GetEnrollment(
+        int id,
+        IMarksService service,
+        CancellationToken cancellationToken)
+    {
+        var enrollment = await service.GetEnrollmentAsync(id, cancellationToken);
+        return enrollment is null
+            ? ApiResults.NotFound($"Enrollment {id} was not found.")
+            : Results.Ok(enrollment);
     }
 
     private static async Task<IResult> UpdateMark(
         int id,
         UpdateMarkRequest request,
-        AppDbContext db,
+        IMarksService service,
         CancellationToken cancellationToken)
     {
         var validation = ApiResults.Validate(request);
@@ -553,26 +352,7 @@ internal static class ResourceEndpoints
         {
             return validation;
         }
-        var enrollment = await db.Enrollments.FindAsync([id], cancellationToken);
-        if (enrollment is null)
-        {
-            return ApiResults.NotFound($"Enrollment {id} was not found.");
-        }
-        enrollment.Mark = request.Mark!.Value;
-        await db.SaveChangesAsync(cancellationToken);
-        return Results.Ok(ToEnrollmentResponse(enrollment));
-    }
-
-    private static async Task<IResult> GetEnrollment(
-        int id,
-        AppDbContext db,
-        CancellationToken cancellationToken)
-    {
-        var enrollment = await db.Enrollments.AsNoTracking()
-            .Where(item => item.Id == id)
-            .Select(item => new EnrollmentResponse(
-                item.Id, item.StudentId, item.CourseId, item.Mark, item.EnrolledAtUtc))
-            .SingleOrDefaultAsync(cancellationToken);
+        var enrollment = await service.UpdateMarkAsync(id, request, cancellationToken);
         return enrollment is null
             ? ApiResults.NotFound($"Enrollment {id} was not found.")
             : Results.Ok(enrollment);
@@ -580,44 +360,21 @@ internal static class ResourceEndpoints
 
     private static async Task<IResult> DeleteEnrollment(
         int id,
-        AppDbContext db,
-        CancellationToken cancellationToken)
-    {
-        var enrollment = await db.Enrollments.FindAsync([id], cancellationToken);
-        if (enrollment is null)
-        {
-            return ApiResults.NotFound($"Enrollment {id} was not found.");
-        }
-        db.Enrollments.Remove(enrollment);
-        await db.SaveChangesAsync(cancellationToken);
-        return Results.NoContent();
-    }
+        IMarksService service,
+        CancellationToken cancellationToken) =>
+        await service.DeleteEnrollmentAsync(id, cancellationToken)
+            ? Results.NoContent()
+            : ApiResults.NotFound($"Enrollment {id} was not found.");
 
     private static async Task<IResult> GetCourseStats(
         int courseId,
-        AppDbContext db,
-        IConfiguration configuration,
+        IMarksService service,
         CancellationToken cancellationToken)
     {
-        if (!await db.Courses.AnyAsync(course => course.Id == courseId, cancellationToken))
-        {
-            return ApiResults.NotFound($"Course {courseId} was not found.");
-        }
-
-        var enrollments = await db.Enrollments.AsNoTracking()
-            .Where(enrollment => enrollment.CourseId == courseId)
-            .Select(enrollment => enrollment.Mark)
-            .ToListAsync(cancellationToken);
-        var graded = enrollments.Where(mark => mark.HasValue).Select(mark => mark!.Value).ToArray();
-        var passMark = configuration.GetValue<int>("PassMark");
-        var response = new CourseStatsResponse(
-            courseId,
-            enrollments.Count,
-            graded.Length,
-            graded.Length == 0 ? null : (decimal)graded.Average(),
-            graded.Count(mark => mark >= passMark),
-            graded.Count(mark => mark < passMark));
-        return Results.Ok(response);
+        var stats = await service.GetCourseStatsAsync(courseId, cancellationToken);
+        return stats is null
+            ? ApiResults.NotFound($"Course {courseId} was not found.")
+            : Results.Ok(stats);
     }
 
     private static bool CanReadStudent(ClaimsPrincipal principal, int studentId)
@@ -630,13 +387,4 @@ internal static class ResourceEndpoints
             && int.TryParse(principal.FindFirstValue("student_id"), out var ownStudentId)
             && ownStudentId == studentId;
     }
-
-    private static StudentResponse ToStudentResponse(Student student) =>
-        new(student.Id, student.RegistrationNo, student.FullName, student.Email, student.CreatedAtUtc);
-
-    private static CourseResponse ToCourseResponse(Course course) =>
-        new(course.Id, course.Code, course.Title, course.CreditHours, course.CreatedAtUtc);
-
-    private static EnrollmentResponse ToEnrollmentResponse(Enrollment enrollment) =>
-        new(enrollment.Id, enrollment.StudentId, enrollment.CourseId, enrollment.Mark, enrollment.EnrolledAtUtc);
 }

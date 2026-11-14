@@ -1,0 +1,971 @@
+{
+  "info": {
+    "_postman_id": "9d9c0e42-59b8-4a5b-a188-0bb46b2ca02e",
+    "name": "Marks API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const expected = Number(pm.request.headers.get(\"x-expected-status\"));",
+          "pm.test(\"status matches expected\", () => pm.expect(pm.response.code).to.eql(expected));",
+          "pm.test(\"response follows JSON or Problem Details contract\", () => {",
+          "  if (expected === 204) {",
+          "    pm.expect(pm.response.text()).to.eql(\"\");",
+          "    return;",
+          "  }",
+          "  pm.expect(pm.response.headers.get(\"Content-Type\") || \"\").to.include(\"json\");",
+          "  const body = pm.response.json();",
+          "  if (expected >= 400) {",
+          "    pm.expect(body.status).to.eql(expected);",
+          "    pm.expect(body.title).to.be.a(\"string\").and.not.empty;",
+          "    if (expected === 400) pm.expect(body.errors).to.be.an(\"object\");",
+          "  } else {",
+          "    pm.expect(body).to.be.an(\"object\");",
+          "    if (expected === 201) pm.expect(pm.response.headers.get(\"Location\")).to.be.a(\"string\").and.not.empty;",
+          "  }",
+          "});",
+          "const url = pm.request.url.toString();",
+          "if (url.includes(\"/api/auth/login\") && expected === 200) {",
+          "  const login = JSON.parse(pm.request.body.raw);",
+          "  const result = pm.response.json();",
+          "  if (login.username === \"teacher\") pm.environment.set(\"token\", result.token);",
+          "  if (login.username === \"student1\") {",
+          "    pm.environment.set(\"studentToken\", result.token);",
+          "    let part = result.token.split(\".\")[1].replace(/-/g, \"+\").replace(/_/g, \"/\");",
+          "    part += \"=\".repeat((4 - part.length % 4) % 4);",
+          "    const payload = JSON.parse(atob(part));",
+          "    pm.collectionVariables.set(\"ownStudentId\", payload.student_id);",
+          "  }",
+          "}",
+          "if (url.endsWith(\"/api/students\") && pm.request.method === \"GET\" && expected === 200) {",
+          "  const items = pm.response.json().items || [];",
+          "  const ownId = Number(pm.collectionVariables.get(\"ownStudentId\"));",
+          "  const other = items.find(item => item.id !== ownId);",
+          "  if (other) pm.collectionVariables.set(\"otherStudentId\", other.id);",
+          "}",
+          "if (url.endsWith(\"/api/students\") && pm.request.method === \"POST\" && expected === 201)",
+          "  pm.collectionVariables.set(\"studentId\", pm.response.json().id);",
+          "if (url.endsWith(\"/api/courses\") && pm.request.method === \"POST\" && expected === 201)",
+          "  pm.collectionVariables.set(\"courseId\", pm.response.json().id);",
+          "if (url.includes(\"/enrollments\") && pm.request.method === \"POST\" && expected === 201)",
+          "  pm.collectionVariables.set(\"enrollmentId\", pm.response.json().id);"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "studentId",
+      "value": ""
+    },
+    {
+      "key": "courseId",
+      "value": ""
+    },
+    {
+      "key": "enrollmentId",
+      "value": ""
+    },
+    {
+      "key": "ownStudentId",
+      "value": ""
+    },
+    {
+      "key": "otherStudentId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Teacher login (saves token)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-expected-status",
+                "value": "200"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"username\":\"teacher\",\"password\":\"Teacher123!\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Student login (saves own student ID)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-expected-status",
+                "value": "200"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"username\":\"student1\",\"password\":\"Student123!\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Invalid login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-expected-status",
+                "value": "401"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"username\":\"missing-user\",\"password\":\"wrong-password\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Students",
+      "item": [
+        {
+          "name": "List students",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-expected-status",
+                "value": "200"
+              }
+            ],
+            "url": "{{baseUrl}}/api/students?page=1&pageSize=10"
+          }
+        },
+        {
+          "name": "Create student (saves studentId)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-expected-status",
+                "value": "201"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/students",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"registrationNo\":\"PM-2026-001\",\"fullName\":\"Postman Student\",\"email\":\"postman.student@example.test\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Get created student",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-expected-status",
+                "value": "200"
+              }
+            ],
+            "url": "{{baseUrl}}/api/students/{{studentId}}"
+          }
+        },
+        {
+          "name": "Update created student",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "x-expected-status",
+                "value": "200"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/students/{{studentId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"registrationNo\":\"PM-2026-001\",\"fullName\":\"Postman Updated Student\",\"email\":\"postman.student@example.test\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Teacher reads student transcript",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-expected-status",
+                "value": "200"
+              }
+            ],
+            "url": "{{baseUrl}}/api/students/{{studentId}}/transcript"
+          }
+        },
+        {
+          "name": "Student reads own record",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-expected-status",
+                "value": "200"
+              }
+            ],
+            "url": "{{baseUrl}}/api/students/{{ownStudentId}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{studentToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Student reads another student's record",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-expected-status",
+                "value": "403"
+              }
+            ],
+            "url": "{{baseUrl}}/api/students/{{studentId}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{studentToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Courses",
+      "item": [
+        {
+          "name": "List courses",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-expected-status",
+                "value": "200"
+              }
+            ],
+            "url": "{{baseUrl}}/api/courses?page=1&pageSize=10"
+          }
+        },
+        {
+          "name": "Create course (saves courseId)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-expected-status",
+                "value": "201"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/courses",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"code\":\"PM2026\",\"title\":\"Postman Test Course\",\"creditHours\":3}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Get created course",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-expected-status",
+                "value": "200"
+              }
+            ],
+            "url": "{{baseUrl}}/api/courses/{{courseId}}"
+          }
+        },
+        {
+          "name": "Update created course",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "x-expected-status",
+                "value": "200"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/courses/{{courseId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"code\":\"PM2026\",\"title\":\"Updated Postman Course\",\"creditHours\":4}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Enrollments and Marks",
+      "item": [
+        {
+          "name": "Enroll student (saves enrollmentId)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-expected-status",
+                "value": "201"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/courses/{{courseId}}/enrollments",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"studentId\":{{studentId}}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "List course enrollments",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-expected-status",
+                "value": "200"
+              }
+            ],
+            "url": "{{baseUrl}}/api/courses/{{courseId}}/enrollments?page=1&pageSize=10"
+          }
+        },
+        {
+          "name": "Get enrollment",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-expected-status",
+                "value": "200"
+              }
+            ],
+            "url": "{{baseUrl}}/api/enrollments/{{enrollmentId}}"
+          }
+        },
+        {
+          "name": "Set mark",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "x-expected-status",
+                "value": "200"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/enrollments/{{enrollmentId}}/mark",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"mark\":80}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Course statistics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-expected-status",
+                "value": "200"
+              }
+            ],
+            "url": "{{baseUrl}}/api/courses/{{courseId}}/stats"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reports",
+      "item": [
+        {
+          "name": "Teacher transcript",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-expected-status",
+                "value": "200"
+              }
+            ],
+            "url": "{{baseUrl}}/api/students/{{studentId}}/transcript"
+          }
+        },
+        {
+          "name": "Student own transcript",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-expected-status",
+                "value": "200"
+              }
+            ],
+            "url": "{{baseUrl}}/api/students/{{ownStudentId}}/transcript",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{studentToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health check",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-expected-status",
+                "value": "200"
+              }
+            ],
+            "url": "{{baseUrl}}/health",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Negative Tests",
+      "item": [
+        {
+          "name": "No token on students endpoint",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-expected-status",
+                "value": "401"
+              }
+            ],
+            "url": "{{baseUrl}}/api/students",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Student cannot list students",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-expected-status",
+                "value": "403"
+              }
+            ],
+            "url": "{{baseUrl}}/api/students",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{studentToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Student cannot create course",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-expected-status",
+                "value": "403"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/courses",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"code\":\"PMFORBID\",\"title\":\"Forbidden\",\"creditHours\":1}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{studentToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Student cannot read course statistics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-expected-status",
+                "value": "403"
+              }
+            ],
+            "url": "{{baseUrl}}/api/courses/{{courseId}}/stats",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{studentToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Empty student fields",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-expected-status",
+                "value": "400"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/students",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"registrationNo\":\"\",\"fullName\":\"\",\"email\":\"bad\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Duplicate registration number",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-expected-status",
+                "value": "409"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/students",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"registrationNo\":\"PM-2026-001\",\"fullName\":\"Duplicate Registration\",\"email\":\"duplicate.reg@example.test\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Duplicate email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-expected-status",
+                "value": "409"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/students",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"registrationNo\":\"PM-2026-002\",\"fullName\":\"Duplicate Email\",\"email\":\"postman.student@example.test\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Unknown student",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-expected-status",
+                "value": "404"
+              }
+            ],
+            "url": "{{baseUrl}}/api/students/2147483647"
+          }
+        },
+        {
+          "name": "Duplicate course code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-expected-status",
+                "value": "409"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/courses",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"code\":\"PM2026\",\"title\":\"Duplicate Course\",\"creditHours\":2}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Invalid course credit hours",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-expected-status",
+                "value": "400"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/courses",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"code\":\"PMBAD\",\"title\":\"Bad Credit\",\"creditHours\":5}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Unknown course",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-expected-status",
+                "value": "404"
+              }
+            ],
+            "url": "{{baseUrl}}/api/courses/2147483647"
+          }
+        },
+        {
+          "name": "Double enrollment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-expected-status",
+                "value": "409"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/courses/{{courseId}}/enrollments",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"studentId\":{{studentId}}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Mark greater than 100",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "x-expected-status",
+                "value": "400"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/enrollments/{{enrollmentId}}/mark",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"mark\":101}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Negative mark",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "x-expected-status",
+                "value": "400"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/enrollments/{{enrollmentId}}/mark",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"mark\":-1}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Delete student with enrollments",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "x-expected-status",
+                "value": "409"
+              }
+            ],
+            "url": "{{baseUrl}}/api/students/{{studentId}}"
+          }
+        },
+        {
+          "name": "Delete course with enrollments",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "x-expected-status",
+                "value": "409"
+              }
+            ],
+            "url": "{{baseUrl}}/api/courses/{{courseId}}"
+          }
+        },
+        {
+          "name": "Delete enrollment",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "x-expected-status",
+                "value": "204"
+              }
+            ],
+            "url": "{{baseUrl}}/api/enrollments/{{enrollmentId}}"
+          }
+        },
+        {
+          "name": "Delete course after enrollment removal",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "x-expected-status",
+                "value": "204"
+              }
+            ],
+            "url": "{{baseUrl}}/api/courses/{{courseId}}"
+          }
+        },
+        {
+          "name": "Delete student after enrollment removal",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "x-expected-status",
+                "value": "204"
+              }
+            ],
+            "url": "{{baseUrl}}/api/students/{{studentId}}"
+          }
+        }
+      ]
+    }
+  ]
+}
